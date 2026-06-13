@@ -127,7 +127,9 @@ function mfv_video_ext_mime(): array {
     'mp4' => 'video/mp4', 'm4v' => 'video/mp4',
     'webm' => 'video/webm',
     'ogv' => 'video/ogg',
-    'mov' => 'video/quicktime',
+    // QuickTime is ISO-BMFF; labeling H.264 .mov as video/mp4 lets Chrome/
+    // Firefox decode it (they often refuse video/quicktime).
+    'mov' => 'video/mp4',
     'mkv' => 'video/x-matroska',
     'avi' => 'video/x-msvideo',
     'mpg' => 'video/mpeg', 'mpeg' => 'video/mpeg',
@@ -138,12 +140,31 @@ function mfv_video_ext_mime(): array {
   ];
 }
 
+/** Audio extension -> MIME. Keys lowercase, without the leading dot. */
+function mfv_audio_ext_mime(): array {
+  return [
+    'mp3' => 'audio/mpeg',
+    'aac' => 'audio/aac',
+    'm4a' => 'audio/mp4', 'm4b' => 'audio/mp4',
+    'flac' => 'audio/flac',
+    'wav' => 'audio/wav', 'wave' => 'audio/wav',
+    'oga' => 'audio/ogg', 'ogg' => 'audio/ogg', 'opus' => 'audio/ogg',
+    'wma' => 'audio/x-ms-wma',
+    'aif' => 'audio/aiff', 'aiff' => 'audio/aiff',
+  ];
+}
+
+/** Camera RAW image extensions (preview is extracted server-side). */
+function mfv_raw_ext(): array {
+  return ['nef', 'nrw', 'cr2', 'cr3', 'crw', 'arw', 'sr2', 'srf',
+          'dng', 'raf', 'rw2', 'orf', 'pef', 'srw', 'raw', '3fr', 'dcr', 'kdc'];
+}
+
 /** Video magic-byte sniff. Distinct from image ftyp brands (avif/heic). */
 function mfv_is_video_magic(string $bytes): bool {
   $len = strlen($bytes);
   if ($len < 12) return false;
   if (strncmp($bytes, "\x1A\x45\xDF\xA3", 4) === 0) return true;          // matroska / webm (EBML)
-  if (strncmp($bytes, "OggS", 4) === 0) return true;                       // ogg (video or audio container)
   if (strncmp($bytes, "FLV", 3) === 0) return true;                        // flv
   if (strncmp($bytes, "RIFF", 4) === 0 && strncmp(substr($bytes, 8, 4), "AVI ", 4) === 0) return true; // avi
   if (strncmp($bytes, "\x00\x00\x01\xBA", 4) === 0) return true;          // mpeg program stream
@@ -151,10 +172,27 @@ function mfv_is_video_magic(string $bytes): bool {
   if (strncmp(substr($bytes, 4, 4), "ftyp", 4) === 0) {                    // ISO-BMFF: mp4 / mov / 3gp
     $brand = strtolower(rtrim(substr($bytes, 8, 4)));
     $videoBrands = ['isom', 'iso2', 'iso4', 'iso5', 'iso6', 'mp41', 'mp42', 'avc1',
-                    'm4v', 'm4a', 'qt', 'mmp4', 'dash', 'mp71', '3gp4', '3gp5',
+                    'm4v', 'qt', 'mmp4', 'dash', 'mp71', '3gp4', '3gp5',
                     '3gp6', '3g2a', '3ge6', '3gg6'];
     if (in_array($brand, $videoBrands, true)) return true;
   }
+  return false;
+}
+
+/** Audio magic-byte sniff (for extensionless audio). */
+function mfv_is_audio_magic(string $bytes): bool {
+  $len = strlen($bytes);
+  if ($len < 4) return false;
+  if (strncmp($bytes, "ID3", 3) === 0) return true;                        // mp3 with ID3 tag
+  if (($c0 = ord($bytes[0])) === 0xFF) {                                    // mpeg-audio / ADTS-aac frame sync
+    $c1 = ord($bytes[1]);
+    if (($c1 & 0xE0) === 0xE0) return true;
+  }
+  if (strncmp($bytes, "fLaC", 4) === 0) return true;                        // flac
+  if (strncmp($bytes, "OggS", 4) === 0) return true;                        // ogg (treated as audio)
+  if ($len >= 12 && strncmp($bytes, "RIFF", 4) === 0 && strncmp(substr($bytes, 8, 4), "WAVE", 4) === 0) return true; // wav
+  // m4a is ISO-BMFF and shares brands with mp4 video, so it is matched by
+  // extension only (above) to avoid grabbing mp4 video files here.
   return false;
 }
 
@@ -219,11 +257,14 @@ function mfv_sniff_structure(string $text): ?string {
 
 /** Build a detection result with all fields defaulted. */
 function mfv_result(string $language = '', bool $isImage = false, bool $isVideo = false,
-                    bool $isBinary = false, bool $override = false): array {
+                    bool $isBinary = false, bool $override = false,
+                    bool $isAudio = false, bool $isRaw = false): array {
   return [
     'language' => $language,
     'isImage'  => $isImage,
     'isVideo'  => $isVideo,
+    'isAudio'  => $isAudio,
+    'isRaw'    => $isRaw,
     'isBinary' => $isBinary,
     'override' => $override,
   ];
@@ -245,7 +286,13 @@ function mfv_detect(string $path, string $sample): array {
   $base = strtolower(basename($path));
   $ext  = strtolower(pathinfo($path, PATHINFO_EXTENSION));
 
-  // 2a. image by extension or magic bytes. SVG renders as an image too; it is
+  // 2a-raw. camera RAW (nef/cr2/...) -> treated as an image; the server
+  // extracts the embedded JPEG preview (browsers can't render RAW).
+  if (in_array($ext, mfv_raw_ext(), true)) {
+    return mfv_result('', true, false, false, false, false, true);
+  }
+
+  // 2b. image by extension or magic bytes. SVG renders as an image too; it is
   // streamed as image/svg+xml and shown in an <img>, which does not execute
   // embedded scripts (unlike inline <svg>).
   $imageExts = ['png','jpg','jpeg','gif','webp','bmp','ico','avif','svg'];
@@ -253,12 +300,17 @@ function mfv_detect(string $path, string $sample): array {
     return mfv_result('', true);
   }
 
-  // 2a-video. video by extension or magic bytes (after image so avif/heif win).
+  // 2c. video by extension or magic bytes (after image so avif/heif win).
   if (isset(mfv_video_ext_mime()[$ext]) || mfv_is_video_magic($sample)) {
     return mfv_result('', false, true);
   }
 
-  // 2b. extension / basename map
+  // 2d. audio by extension or magic bytes.
+  if (isset(mfv_audio_ext_mime()[$ext]) || mfv_is_audio_magic($sample)) {
+    return mfv_result('', false, false, false, false, true);
+  }
+
+  // 2e. extension / basename map
   $byName = mfv_basename_map();
   if (isset($byName[$base])) {
     return mfv_result($byName[$base]);

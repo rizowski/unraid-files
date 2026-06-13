@@ -129,6 +129,18 @@
     img.addEventListener("load", function () {
       shell.meta.textContent = img.naturalWidth + " x " + img.naturalHeight + " px  -  " + formatBytes(info.size);
     });
+    // For RAW files the server extracts an embedded JPEG; if none was found the
+    // image fails to load, so show a clear message instead of a broken icon.
+    img.addEventListener("error", function () {
+      wrap.innerHTML = "";
+      var note = el("div", "mfv-notplayable");
+      note.appendChild(el("p", null, info.isRaw
+        ? "Couldn't extract a preview from this RAW file. Download it, or install exiftool on the server for RAW previews."
+        : "Couldn't render this image. Download it to view locally."));
+      var dl2 = el("a", "mfv-btn", "Download"); dl2.href = info.rawUrl; dl2.setAttribute("download", info.name);
+      note.appendChild(dl2);
+      wrap.appendChild(note);
+    });
 
     wrap.appendChild(img);
     shell.body.appendChild(wrap);
@@ -171,6 +183,43 @@
     });
 
     wrap.appendChild(video);
+    shell.body.appendChild(wrap);
+    shell.actions.appendChild(dl);
+    shell.meta.textContent = formatBytes(info.size);
+  }
+
+  /* ------------------------------------------------------------------ audio */
+
+  function renderAudio(shell, info) {
+    var wrap = el("div", "mfv-audiowrap");
+    var audio = d.createElement("audio");
+    audio.className = "mfv-audio";
+    audio.controls = true;
+    audio.preload = "metadata";
+    audio.src = info.rawUrl;     // range-served by Content.php
+
+    var name = el("div", "mfv-audioname");
+    name.textContent = info.name;
+
+    var dl = el("a", "mfv-btn", "Download");
+    dl.href = info.rawUrl;
+    dl.setAttribute("download", info.name);
+
+    audio.addEventListener("error", function () {
+      wrap.innerHTML = "";
+      var note = el("div", "mfv-notplayable");
+      note.appendChild(el("p", null, "This audio format can't be played in the browser. Download it to listen locally."));
+      var dl2 = el("a", "mfv-btn", "Download"); dl2.href = info.rawUrl; dl2.setAttribute("download", info.name);
+      note.appendChild(dl2);
+      wrap.appendChild(note);
+    });
+    audio.addEventListener("loadedmetadata", function () {
+      var dur = isFinite(audio.duration) ? Math.round(audio.duration) : 0;
+      shell.meta.textContent = (dur ? dur + "s  -  " : "") + formatBytes(info.size);
+    });
+
+    wrap.appendChild(name);
+    wrap.appendChild(audio);
     shell.body.appendChild(wrap);
     shell.actions.appendChild(dl);
     shell.meta.textContent = formatBytes(info.size);
@@ -355,6 +404,7 @@
         }
         if (info.isImage) { renderImage(shell, info); return; }
         if (info.isVideo) { renderVideo(shell, info); return; }
+        if (info.isAudio) { renderAudio(shell, info); return; }
         if (info.isBinary) {
           var box = el("div", "mfv-binary");
           box.appendChild(el("p", null, "Binary file - no text preview."));

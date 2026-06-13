@@ -61,6 +61,14 @@
 .mfv-notplayable { margin: auto; padding: 24px; text-align: center; color: #c2c7d0; font-size: 14px; }
 .mfv-notplayable p { margin: 0 0 12px; }
 
+/* audio */
+.mfv-audiowrap {
+  flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 16px; padding: 24px;
+}
+.mfv-audioname { color: #e6e6e6; font-size: 14px; word-break: break-all; text-align: center; max-width: 90%; }
+.mfv-audio { width: min(560px, 90%); }
+
 /* editor */
 .mfv-editor { flex: 1 1 auto; width: 100%; min-height: 0; }
 .mfv-editor .ace_editor { width: 100%; height: 100%; }

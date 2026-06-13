@@ -41,6 +41,8 @@
 
   var IMAGE_EXTS = ["png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "avif"];
   var VIDEO_EXTS = ["mp4", "m4v", "webm", "ogv", "mov", "mkv", "avi", "mpg", "mpeg", "wmv", "flv", "ts", "3gp"];
+  var AUDIO_EXTS = ["mp3", "aac", "m4a", "m4b", "flac", "wav", "wave", "oga", "ogg", "opus", "wma", "aif", "aiff"];
+  var RAW_EXTS = ["nef", "nrw", "cr2", "cr3", "crw", "arw", "sr2", "srf", "dng", "raf", "rw2", "orf", "pef", "srw", "raw", "3fr", "dcr", "kdc"];
 
   function basename(path) {
     var p = String(path || "").replace(/\/+$/, "");
@@ -58,12 +60,15 @@
     var name = basename(path);
     var lower = name.toLowerCase();
     var ext = extOf(lower);
-    if (IMAGE_EXTS.indexOf(ext) >= 0) return { isImage: true, isVideo: false, language: "" };
-    if (VIDEO_EXTS.indexOf(ext) >= 0) return { isImage: false, isVideo: true, language: "" };
-    if (BASENAME_MAP[lower]) return { isImage: false, isVideo: false, language: BASENAME_MAP[lower] };
-    if (ext && EXT_MAP[ext]) return { isImage: false, isVideo: false, language: EXT_MAP[ext] };
+    if (RAW_EXTS.indexOf(ext) >= 0) return { isImage: true, isRaw: true, language: "" };
+    if (IMAGE_EXTS.indexOf(ext) >= 0) return { isImage: true, language: "" };
+    if (VIDEO_EXTS.indexOf(ext) >= 0) return { isVideo: true, language: "" };
+    if (AUDIO_EXTS.indexOf(ext) >= 0) return { isAudio: true, language: "" };
+    if (BASENAME_MAP[lower]) return { language: BASENAME_MAP[lower] };
+    if (ext && EXT_MAP[ext]) return { language: EXT_MAP[ext] };
     return null;
   }
 
-  w.MFVDetect = { guess: guess, basename: basename, EXT_MAP: EXT_MAP, IMAGE_EXTS: IMAGE_EXTS, VIDEO_EXTS: VIDEO_EXTS };
+  w.MFVDetect = { guess: guess, basename: basename, EXT_MAP: EXT_MAP,
+    IMAGE_EXTS: IMAGE_EXTS, VIDEO_EXTS: VIDEO_EXTS, AUDIO_EXTS: AUDIO_EXTS, RAW_EXTS: RAW_EXTS };
 })(window);

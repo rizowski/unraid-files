@@ -58,6 +58,71 @@ function mfv_video_mime(string $path, string $sample = ''): string {
   return 'video/mp4'; // safest default for an HTML5 <video> attempt
 }
 
+/** Best-effort audio MIME from extension, falling back to magic bytes. */
+function mfv_audio_mime(string $path, string $sample = ''): string {
+  $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+  $map = mfv_audio_ext_mime();
+  if (isset($map[$ext])) return $map[$ext];
+  if (strncmp($sample, 'ID3', 3) === 0) return 'audio/mpeg';
+  if (strlen($sample) >= 2 && ord($sample[0]) === 0xFF && (ord($sample[1]) & 0xE0) === 0xE0) return 'audio/mpeg';
+  if (strncmp($sample, 'fLaC', 4) === 0) return 'audio/flac';
+  if (strncmp($sample, 'OggS', 4) === 0) return 'audio/ogg';
+  if (strlen($sample) >= 12 && strncmp($sample, 'RIFF', 4) === 0
+      && strncmp(substr($sample, 8, 4), 'WAVE', 4) === 0) return 'audio/wav';
+  return 'audio/mpeg';
+}
+
+/** True if $bin is an executable on PATH. */
+function mfv_have(string $bin): bool {
+  $out = @shell_exec('command -v ' . escapeshellarg($bin) . ' 2>/dev/null');
+  return is_string($out) && trim($out) !== '';
+}
+
+/** Run a command, returning raw stdout (may be binary), or null on empty/failure. */
+function mfv_run_capture(array $argv): ?string {
+  $cmd = implode(' ', array_map('escapeshellarg', $argv)) . ' 2>/dev/null';
+  $out = @shell_exec($cmd);
+  return (is_string($out) && $out !== '') ? $out : null;
+}
+
+/** Largest embedded JPEG inside a file (pure PHP; no external tools). */
+function mfv_embedded_jpeg(string $path): ?string {
+  $data = @file_get_contents($path, false, null, 0, 64 * 1024 * 1024);
+  if ($data === false || $data === '') return null;
+  $best = null; $bestLen = 0; $offset = 0;
+  while (($soi = strpos($data, "\xFF\xD8\xFF", $offset)) !== false) {
+    $eoi = strpos($data, "\xFF\xD9", $soi + 3);
+    if ($eoi === false) break;
+    $jLen = $eoi + 2 - $soi;
+    if ($jLen > $bestLen) { $bestLen = $jLen; $best = substr($data, $soi, $jLen); }
+    $offset = $eoi + 2;
+  }
+  return ($best !== null && $bestLen > 2048) ? $best : null;
+}
+
+/**
+ * Extract a viewable JPEG preview from a camera RAW file. Tries accurate
+ * external tools first (exiftool/dcraw/ImageMagick), then a pure-PHP scan for
+ * the embedded JPEG so it still works on a box with no extra packages.
+ */
+function mfv_extract_raw_preview(string $path): ?string {
+  if (mfv_have('exiftool')) {
+    foreach (['-JpgFromRaw', '-PreviewImage', '-ThumbnailImage'] as $tag) {
+      $out = mfv_run_capture(['exiftool', '-b', $tag, $path]);
+      if ($out !== null && strncmp($out, "\xFF\xD8\xFF", 3) === 0) return $out;
+    }
+  }
+  if (mfv_have('dcraw')) {
+    $out = mfv_run_capture(['dcraw', '-e', '-c', $path]);
+    if ($out !== null && strncmp($out, "\xFF\xD8\xFF", 3) === 0) return $out;
+  }
+  if (mfv_have('convert')) {
+    $out = mfv_run_capture(['convert', $path . '[0]', 'jpg:-']);
+    if ($out !== null && strncmp($out, "\xFF\xD8\xFF", 3) === 0) return $out;
+  }
+  return mfv_embedded_jpeg($path);
+}
+
 /**
  * Stream a file with HTTP range support. Browsers require 206 Partial Content
  * to start and seek <video>. Handles normal and suffix ranges, 416 on an
@@ -132,11 +197,30 @@ $sample = (string)fread($fh, MFV_SNIFF_BYTES);
 
 $detected = mfv_detect($path, $sample);
 
-// --- raw streaming mode (images + video) -------------------------------------
+// --- raw streaming mode (images + video + audio + RAW previews) --------------
 if (($_GET['raw'] ?? '') === '1') {
   if ($detected['isVideo']) {
     // Range-aware streaming so <video> can play and seek.
     mfv_stream_range($fh, $size, mfv_video_mime($path, $sample));
+  }
+  if ($detected['isAudio']) {
+    mfv_stream_range($fh, $size, mfv_audio_mime($path, $sample));
+  }
+  if (!empty($detected['isRaw'])) {
+    // Camera RAW: serve the extracted embedded JPEG preview.
+    fclose($fh);
+    $jpeg = mfv_extract_raw_preview($path);
+    if ($jpeg === null) {
+      mfv_json(['ok' => false, 'error' => 'No embedded preview found in this RAW file. Install exiftool for best results.'], 415);
+    }
+    @set_time_limit(0);
+    while (ob_get_level() > 0) ob_end_clean();
+    header('Content-Type: image/jpeg');
+    header('Content-Length: ' . strlen($jpeg));
+    header('Content-Disposition: inline; filename="' . rawurlencode(pathinfo($path, PATHINFO_FILENAME)) . '.jpg"');
+    header('X-Content-Type-Options: nosniff');
+    echo $jpeg;
+    exit;
   }
   if (!$detected['isImage']) {
     fclose($fh);
@@ -169,6 +253,8 @@ $response = [
   'language'    => $detected['language'],
   'isImage'     => $detected['isImage'],
   'isVideo'     => $detected['isVideo'],
+  'isAudio'     => $detected['isAudio'],
+  'isRaw'       => $detected['isRaw'],
   'isBinary'    => $detected['isBinary'],
   'override'    => $detected['override'],
   'owner_uid'   => $decision['owner_uid'],
@@ -182,8 +268,8 @@ $response = [
   'rawUrl'      => '/plugins/modern.file.viewer/include/Content.php?raw=1&path=' . rawurlencode($path),
 ];
 
-if ($detected['isImage'] || $detected['isVideo'] || $detected['isBinary']) {
-  // No inline text payload for images/video/binaries.
+if ($detected['isImage'] || $detected['isVideo'] || $detected['isAudio'] || $detected['isBinary']) {
+  // No inline text payload for images/video/audio/binaries.
   $response['content'] = null;
   $response['truncated'] = false;
   fclose($fh);
