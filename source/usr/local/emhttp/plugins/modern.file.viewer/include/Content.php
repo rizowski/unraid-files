@@ -43,6 +43,81 @@ function mfv_image_mime(string $path, string $sample): string {
   return 'application/octet-stream';
 }
 
+/** Best-effort video MIME from extension, falling back to magic bytes. */
+function mfv_video_mime(string $path, string $sample = ''): string {
+  $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+  $map = mfv_video_ext_mime();
+  if (isset($map[$ext])) return $map[$ext];
+  // Extensionless / unknown: sniff so the browser still gets a usable type.
+  if (strncmp($sample, "\x1A\x45\xDF\xA3", 4) === 0) return 'video/webm';     // matroska/webm
+  if (strncmp($sample, 'OggS', 4) === 0) return 'video/ogg';
+  if (strncmp($sample, 'FLV', 3) === 0) return 'video/x-flv';
+  if (strlen($sample) >= 12 && strncmp($sample, 'RIFF', 4) === 0
+      && strncmp(substr($sample, 8, 4), 'AVI ', 4) === 0) return 'video/x-msvideo';
+  if (strlen($sample) >= 12 && strncmp(substr($sample, 4, 4), 'ftyp', 4) === 0) return 'video/mp4';
+  return 'video/mp4'; // safest default for an HTML5 <video> attempt
+}
+
+/**
+ * Stream a file with HTTP range support. Browsers require 206 Partial Content
+ * to start and seek <video>. Handles normal and suffix ranges, 416 on an
+ * unsatisfiable range, and streams in chunks so large files never buffer whole.
+ */
+function mfv_stream_range($fh, int $size, string $mime): void {
+  // A long video stream must not be cut off by the script time limit or by
+  // output buffering / compression layered on top.
+  @set_time_limit(0);
+  @ini_set('zlib.output_compression', 'Off');
+  while (ob_get_level() > 0) ob_end_clean();
+
+  header('Content-Type: ' . $mime);
+  header('Accept-Ranges: bytes');
+  header('X-Content-Type-Options: nosniff');
+
+  $start = 0;
+  $end = $size - 1;
+  $range = $_SERVER['HTTP_RANGE'] ?? '';
+
+  if ($range !== '' && preg_match('/bytes=(\d*)-(\d*)/', $range, $m)) {
+    if ($m[1] === '' && $m[2] !== '') {
+      // suffix range: final N bytes
+      $start = max(0, $size - (int)$m[2]);
+    } else {
+      $start = (int)$m[1];
+      if ($m[2] !== '') $end = (int)$m[2];
+    }
+    if ($size === 0 || $start > $end || $start >= $size) {
+      http_response_code(416);
+      header("Content-Range: bytes */$size");
+      fclose($fh);
+      exit;
+    }
+    $end = min($end, $size - 1);
+    http_response_code(206);
+    header("Content-Range: bytes $start-$end/$size");
+  } else {
+    http_response_code(200);
+  }
+
+  $length = $end - $start + 1;
+  header('Content-Length: ' . $length);
+
+  fseek($fh, $start);
+  $remaining = $length;
+  $chunk = 262144; // 256 KiB
+  while ($remaining > 0 && !feof($fh)) {
+    $read = $remaining > $chunk ? $chunk : $remaining;
+    $buf = fread($fh, $read);
+    if ($buf === false || $buf === '') break;
+    echo $buf;
+    flush();
+    $remaining -= strlen($buf);
+    if (connection_aborted()) break;
+  }
+  fclose($fh);
+  exit;
+}
+
 $path = mfv_valid_path($_GET['path'] ?? null);
 if ($path === null) {
   mfv_json(['ok' => false, 'error' => 'File not found or outside an allowed share (/mnt, /boot).'], 404);
@@ -57,16 +132,21 @@ $sample = (string)fread($fh, MFV_SNIFF_BYTES);
 
 $detected = mfv_detect($path, $sample);
 
-// --- raw image streaming mode -------------------------------------------------
+// --- raw streaming mode (images + video) -------------------------------------
 if (($_GET['raw'] ?? '') === '1') {
+  if ($detected['isVideo']) {
+    // Range-aware streaming so <video> can play and seek.
+    mfv_stream_range($fh, $size, mfv_video_mime($path, $sample));
+  }
   if (!$detected['isImage']) {
     fclose($fh);
-    mfv_json(['ok' => false, 'error' => 'Not an image.'], 415);
+    mfv_json(['ok' => false, 'error' => 'Not a previewable media file.'], 415);
   }
   // SVG is served as a downloadable image; the browser renders it in <img>,
   // which does not execute embedded scripts (unlike inline <svg>).
   header('Content-Type: ' . mfv_image_mime($path, $sample));
   header('Content-Length: ' . $size);
+  header('Accept-Ranges: bytes');
   header('Content-Disposition: inline; filename="' . rawurlencode(basename($path)) . '"');
   header('X-Content-Type-Options: nosniff');
   rewind($fh);
@@ -88,6 +168,7 @@ $response = [
   'mtime'       => $mtime,
   'language'    => $detected['language'],
   'isImage'     => $detected['isImage'],
+  'isVideo'     => $detected['isVideo'],
   'isBinary'    => $detected['isBinary'],
   'override'    => $detected['override'],
   'owner_uid'   => $decision['owner_uid'],
@@ -101,8 +182,8 @@ $response = [
   'rawUrl'      => '/plugins/modern.file.viewer/include/Content.php?raw=1&path=' . rawurlencode($path),
 ];
 
-if ($detected['isImage'] || $detected['isBinary']) {
-  // No inline text payload for images/binaries.
+if ($detected['isImage'] || $detected['isVideo'] || $detected['isBinary']) {
+  // No inline text payload for images/video/binaries.
   $response['content'] = null;
   $response['truncated'] = false;
   fclose($fh);

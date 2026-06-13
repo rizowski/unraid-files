@@ -135,6 +135,47 @@
     shell.actions.appendChild(bar);
   }
 
+  /* ------------------------------------------------------------------ video */
+
+  function renderVideo(shell, info) {
+    var wrap = el("div", "mfv-videowrap");
+    var video = d.createElement("video");
+    video.className = "mfv-video";
+    video.controls = true;
+    video.preload = "metadata";
+    video.src = info.rawUrl;     // range-served by Content.php so seeking works
+
+    var dl = el("a", "mfv-btn", "Download");
+    dl.href = info.rawUrl;
+    dl.setAttribute("download", info.name);
+
+    // If the browser can't decode this container/codec (e.g. some mkv/avi/wmv),
+    // replace the player with a clear notice rather than an endless spinner.
+    video.addEventListener("error", function () {
+      if (wrap.parentNode) {
+        wrap.innerHTML = "";
+        var note = el("div", "mfv-notplayable");
+        note.appendChild(el("p", null,
+          "This video format can't be played in the browser. Download it to view locally."));
+        var dl2 = el("a", "mfv-btn", "Download");
+        dl2.href = info.rawUrl; dl2.setAttribute("download", info.name);
+        note.appendChild(dl2);
+        wrap.appendChild(note);
+      }
+    });
+
+    video.addEventListener("loadedmetadata", function () {
+      var dur = isFinite(video.duration) ? Math.round(video.duration) : 0;
+      var dims = (video.videoWidth && video.videoHeight) ? (video.videoWidth + " x " + video.videoHeight + "  -  ") : "";
+      shell.meta.textContent = dims + (dur ? (dur + "s  -  ") : "") + formatBytes(info.size);
+    });
+
+    wrap.appendChild(video);
+    shell.body.appendChild(wrap);
+    shell.actions.appendChild(dl);
+    shell.meta.textContent = formatBytes(info.size);
+  }
+
   /* ------------------------------------------------------------------- text */
 
   function makeEditor(container, language, content, readOnly) {
@@ -313,6 +354,7 @@
           return;
         }
         if (info.isImage) { renderImage(shell, info); return; }
+        if (info.isVideo) { renderVideo(shell, info); return; }
         if (info.isBinary) {
           var box = el("div", "mfv-binary");
           box.appendChild(el("p", null, "Binary file - no text preview."));

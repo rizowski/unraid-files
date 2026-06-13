@@ -121,6 +121,43 @@ function mfv_is_image_magic(string $bytes): bool {
   return false;
 }
 
+/** Video extension -> MIME. Keys lowercase, without the leading dot. */
+function mfv_video_ext_mime(): array {
+  return [
+    'mp4' => 'video/mp4', 'm4v' => 'video/mp4',
+    'webm' => 'video/webm',
+    'ogv' => 'video/ogg',
+    'mov' => 'video/quicktime',
+    'mkv' => 'video/x-matroska',
+    'avi' => 'video/x-msvideo',
+    'mpg' => 'video/mpeg', 'mpeg' => 'video/mpeg',
+    'wmv' => 'video/x-ms-wmv',
+    'flv' => 'video/x-flv',
+    'ts' => 'video/mp2t',
+    '3gp' => 'video/3gpp',
+  ];
+}
+
+/** Video magic-byte sniff. Distinct from image ftyp brands (avif/heic). */
+function mfv_is_video_magic(string $bytes): bool {
+  $len = strlen($bytes);
+  if ($len < 12) return false;
+  if (strncmp($bytes, "\x1A\x45\xDF\xA3", 4) === 0) return true;          // matroska / webm (EBML)
+  if (strncmp($bytes, "OggS", 4) === 0) return true;                       // ogg (video or audio container)
+  if (strncmp($bytes, "FLV", 3) === 0) return true;                        // flv
+  if (strncmp($bytes, "RIFF", 4) === 0 && strncmp(substr($bytes, 8, 4), "AVI ", 4) === 0) return true; // avi
+  if (strncmp($bytes, "\x00\x00\x01\xBA", 4) === 0) return true;          // mpeg program stream
+  if (strncmp($bytes, "\x00\x00\x01\xB3", 4) === 0) return true;          // mpeg video (elementary)
+  if (strncmp(substr($bytes, 4, 4), "ftyp", 4) === 0) {                    // ISO-BMFF: mp4 / mov / 3gp
+    $brand = strtolower(rtrim(substr($bytes, 8, 4)));
+    $videoBrands = ['isom', 'iso2', 'iso4', 'iso5', 'iso6', 'mp41', 'mp42', 'avc1',
+                    'm4v', 'm4a', 'qt', 'mmp4', 'dash', 'mp71', '3gp4', '3gp5',
+                    '3gp6', '3g2a', '3ge6', '3gg6'];
+    if (in_array($brand, $videoBrands, true)) return true;
+  }
+  return false;
+}
+
 /** Heuristic: does this byte sample look like binary (non-text) data? */
 function mfv_looks_binary(string $bytes): bool {
   if ($bytes === '') return false;
@@ -180,17 +217,29 @@ function mfv_sniff_structure(string $text): ?string {
   return null;
 }
 
+/** Build a detection result with all fields defaulted. */
+function mfv_result(string $language = '', bool $isImage = false, bool $isVideo = false,
+                    bool $isBinary = false, bool $override = false): array {
+  return [
+    'language' => $language,
+    'isImage'  => $isImage,
+    'isVideo'  => $isVideo,
+    'isBinary' => $isBinary,
+    'override' => $override,
+  ];
+}
+
 /**
  * Full detection for a file.
  * @param string $path    absolute, already-validated path
  * @param string $sample  the first chunk of file bytes (raw)
- * @return array{language:string,isImage:bool,isBinary:bool,override:bool}
+ * @return array{language:string,isImage:bool,isVideo:bool,isBinary:bool,override:bool}
  */
 function mfv_detect(string $path, string $sample): array {
   // 1. user override wins outright
   $override = mfv_lookup_override($path);
   if ($override !== null && mfv_is_valid_language($override)) {
-    return ['language' => $override, 'isImage' => false, 'isBinary' => false, 'override' => true];
+    return mfv_result($override, false, false, false, true);
   }
 
   $base = strtolower(basename($path));
@@ -201,28 +250,33 @@ function mfv_detect(string $path, string $sample): array {
   // embedded scripts (unlike inline <svg>).
   $imageExts = ['png','jpg','jpeg','gif','webp','bmp','ico','avif','svg'];
   if (in_array($ext, $imageExts, true) || mfv_is_image_magic($sample)) {
-    return ['language' => '', 'isImage' => true, 'isBinary' => false, 'override' => false];
+    return mfv_result('', true);
+  }
+
+  // 2a-video. video by extension or magic bytes (after image so avif/heif win).
+  if (isset(mfv_video_ext_mime()[$ext]) || mfv_is_video_magic($sample)) {
+    return mfv_result('', false, true);
   }
 
   // 2b. extension / basename map
   $byName = mfv_basename_map();
   if (isset($byName[$base])) {
-    return ['language' => $byName[$base], 'isImage' => false, 'isBinary' => false, 'override' => false];
+    return mfv_result($byName[$base]);
   }
   $byExt = mfv_ext_map();
   if ($ext !== '' && isset($byExt[$ext])) {
-    return ['language' => $byExt[$ext], 'isImage' => false, 'isBinary' => false, 'override' => false];
+    return mfv_result($byExt[$ext]);
   }
 
   // 3. content sniffing for unknown / extensionless
   if (mfv_looks_binary($sample)) {
-    return ['language' => '', 'isImage' => false, 'isBinary' => true, 'override' => false];
+    return mfv_result('', false, false, true);
   }
   $mode = mfv_sniff_shebang($sample) ?? mfv_sniff_structure($sample);
   if ($mode !== null) {
-    return ['language' => $mode, 'isImage' => false, 'isBinary' => false, 'override' => false];
+    return mfv_result($mode);
   }
 
   // 4. fallback: readable plain text (replaces "Unsupported preview")
-  return ['language' => 'text', 'isImage' => false, 'isBinary' => false, 'override' => false];
+  return mfv_result('text');
 }

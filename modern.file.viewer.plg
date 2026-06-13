@@ -2,13 +2,13 @@
 <!DOCTYPE PLUGIN [
   <!ENTITY name      "modern.file.viewer">
   <!ENTITY author    "rizowski">
-  <!ENTITY version   "2026.06.12a">
+  <!ENTITY version   "2026.06.13">
   <!ENTITY launch    "Shares/Browse">
   <!ENTITY gitURL    "https://github.com/rizowski/unraid-files">
   <!ENTITY pluginURL "&gitURL;/raw/main/&name;.plg">
   <!ENTITY txz       "&name;-&version;.txz">
   <!ENTITY txzURL    "&gitURL;/releases/download/&version;/&txz;">
-  <!ENTITY md5       "34bb40df76b4a0d38cbe21fa32f8becd">
+  <!ENTITY md5       "238c41543baa4cb1d302d272a0544c55">
   <!ENTITY plugins   "/boot/config/plugins/&name;">
   <!ENTITY emhttp    "/usr/local/emhttp/plugins/&name;">
 ]>
@@ -16,6 +16,11 @@
 <PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.10.0">
 
 <CHANGES>
+###2026.06.13
+- Add video viewing: inline HTML5 player for mp4, webm, ogg and more.
+- Range-aware streaming (HTTP 206) so video plays and seeks without buffering whole files.
+- Graceful download fallback for formats the browser can't decode (mkv/avi/wmv/etc.).
+
 ###2026.06.12a
 - Fix: inject via the supported "Buttons" page hook so assets actually load on the Browse page.
 - Fix: override the real fileEdit(id) handler to open the modern viewer.
