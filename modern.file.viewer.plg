@@ -18,7 +18,7 @@
 <CHANGES>
 ###&version;
 - Initial release.
-- Modern viewer injected into Shares &rarr; Browse: image previews and syntax-highlighted text/config.
+- Modern viewer injected into Shares -&gt; Browse: image previews and syntax-highlighted text/config.
 - Content-based type detection for extensionless files.
 - "Save as type" override store on the flash.
 - Explicit, permission-gated editing that preserves owner/group/mode.

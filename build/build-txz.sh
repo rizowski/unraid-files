@@ -22,6 +22,20 @@ SRC="${ROOT}/source"
 PLG="${ROOT}/${NAME}.plg"
 OUT_DIR="${ROOT}/archive"
 
+# Validate the .plg is well-formed XML before doing anything else. Unraid's
+# plugin manager rejects a malformed .plg with "xml parse error", so catch it
+# here. The internal DTD declares the &name;/&version;/... entities, so xmllint
+# resolves them; only undeclared entities (e.g. a stray &rarr;) fail.
+if command -v xmllint >/dev/null 2>&1; then
+  if ! xmllint --noout "${PLG}" 2>/tmp/mfv_xmllint.err; then
+    echo "ERROR: ${NAME}.plg is not valid XML:" >&2
+    cat /tmp/mfv_xmllint.err >&2
+    exit 1
+  fi
+else
+  echo "NOTE: xmllint not found; skipping .plg XML validation." >&2
+fi
+
 # Read the version from the .plg so there is a single source of truth.
 # Portable across BSD (macOS) and GNU grep.
 VERSION="$(grep -Eo 'ENTITY[[:space:]]+version[[:space:]]+"[^"]+"' "${PLG}" \
