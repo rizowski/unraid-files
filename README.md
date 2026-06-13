@@ -7,10 +7,31 @@ and has no syntax highlighting. This plugin augments the existing Browse view �
 without replacing it — to add:
 
 - **Image previews** for common web formats: png, jpg/jpeg, gif, webp, svg, bmp, ico, avif (with zoom).
+- **Camera RAW previews** for nef, cr2/cr3, arw, dng and more — extracts the embedded JPEG (works with no extra packages).
+- **Video playback** for mp4, webm, mov and more, with range-aware streaming so large files seek instantly.
+- **Audio playback** for mp3, aac, m4a, flac, wav, ogg and more.
 - **Syntax highlighting** for config/text formats: json, yaml/yml, toml, ini/conf/cfg/env, xml, sh, Dockerfile, markdown, logs, and 80+ more.
 - **Content-based type detection** for files with no extension (shebang, JSON/XML/YAML/INI heuristics, binary/magic-byte detection).
 - **"Save as type"** — remember a filename → language mapping so the file highlights correctly next time.
 - **Editing** as an explicit, permission-gated action. Edits preserve the file's original owner/group/mode.
+
+## Screenshots
+
+**Syntax-highlighted config/text** with a "save as type" override:
+
+![Syntax highlighting of a JSON file](docs/images/syntax-highlighting.png)
+
+**Camera RAW preview** (Nikon `.nef`) with zoom controls:
+
+![RAW image preview with zoom controls](docs/images/raw-image-preview.png)
+
+**Inline video player** with seeking:
+
+![Inline video player](docs/images/video-player.png)
+
+**Inline audio player:**
+
+![Inline audio player](docs/images/audio-player.png)
 
 ## How it works
 
