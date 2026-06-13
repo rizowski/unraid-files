@@ -2,13 +2,13 @@
 <!DOCTYPE PLUGIN [
   <!ENTITY name      "modern.file.viewer">
   <!ENTITY author    "rizowski">
-  <!ENTITY version   "2026.06.12">
+  <!ENTITY version   "2026.06.12a">
   <!ENTITY launch    "Shares/Browse">
   <!ENTITY gitURL    "https://github.com/rizowski/unraid-files">
   <!ENTITY pluginURL "&gitURL;/raw/main/&name;.plg">
   <!ENTITY txz       "&name;-&version;.txz">
   <!ENTITY txzURL    "&gitURL;/releases/download/&version;/&txz;">
-  <!ENTITY md5       "a02b51f59ea9b125ca18b4cd1ec4b79b">
+  <!ENTITY md5       "34bb40df76b4a0d38cbe21fa32f8becd">
   <!ENTITY plugins   "/boot/config/plugins/&name;">
   <!ENTITY emhttp    "/usr/local/emhttp/plugins/&name;">
 ]>
@@ -16,7 +16,13 @@
 <PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.10.0">
 
 <CHANGES>
-###&version;
+###2026.06.12a
+- Fix: inject via the supported "Buttons" page hook so assets actually load on the Browse page.
+- Fix: override the real fileEdit(id) handler to open the modern viewer.
+- Fix: correct ACE editor path (/plugins/dynamix/javascript/ace).
+- Fix: well-formed XML in the plugin file.
+
+###2026.06.12
 - Initial release.
 - Modern viewer injected into Shares -&gt; Browse: image previews and syntax-highlighted text/config.
 - Content-based type detection for extensionless files.

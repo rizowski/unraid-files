@@ -20,74 +20,15 @@
   var MFV = w.MFV || {};
   var BASE = MFV.base || "/plugins/modern.file.viewer";
 
-  // Selectors used to recognise the Browse view and file rows. These are the
-  // one place that depends on file-manager internals; confirm against the
-  // installed dynamix.file.manager on a target box if a future Unraid release
-  // changes them. Each is tried in turn.
-  var CFG = {
-    browseMarkers: ["#fileList", ".fileManager", "[id^='Browse']", "table.tablesorter"],
-    fileLinkSelectors: ["a[href*='/mnt/']", "a[href*='/boot/']", "[data-path]", "[data-file]"]
-  };
-
   var PATH_RE = /(\/(?:mnt|boot)\/[^"'?#]+)/;
 
   /* ------------------------------------------------------------------ utils */
-
-  function qs(sel, root) { return (root || d).querySelector(sel); }
-
-  function isBrowsePage() {
-    for (var i = 0; i < CFG.browseMarkers.length; i++) {
-      if (qs(CFG.browseMarkers[i])) return true;
-    }
-    // URL fallback: the file manager Browse view.
-    return /\/Browse\b/i.test(w.location.pathname) || /Shares\/Browse/i.test(w.location.href);
-  }
 
   function formatBytes(n) {
     if (!n && n !== 0) return "";
     var u = ["B", "KB", "MB", "GB", "TB"], i = 0;
     while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
     return (i === 0 ? n : n.toFixed(1)) + " " + u[i];
-  }
-
-  // Does this element (or near ancestor) look like a directory entry rather
-  // than a file? We must not hijack folder navigation.
-  function looksLikeDir(node) {
-    var cls = (node.className && node.className.baseVal) || node.className || "";
-    if (typeof cls === "string" && /\b(dir|folder|directory|parent)\b/i.test(cls)) return true;
-    if (node.getAttribute) {
-      var t = node.getAttribute("data-type") || node.getAttribute("type");
-      if (t && /dir|folder/i.test(t)) return true;
-    }
-    return false;
-  }
-
-  // Pull a /mnt or /boot file path out of a clicked element or its ancestors.
-  // Returns null for directory entries and trailing-slash (folder) paths so
-  // the file manager keeps handling navigation itself.
-  function extractPath(el) {
-    var node = el, hops = 0;
-    while (node && hops < 6) {
-      if (node.getAttribute) {
-        if (looksLikeDir(node)) return null;
-        var dp = node.getAttribute("data-path") || node.getAttribute("data-file");
-        var cand = null;
-        if (dp && PATH_RE.test(dp)) cand = PATH_RE.exec(dp)[1];
-        if (!cand) {
-          var href = node.getAttribute("href");
-          if (href) {
-            try { href = decodeURIComponent(href); } catch (e) {}
-            if (PATH_RE.test(href)) cand = PATH_RE.exec(href)[1];
-          }
-        }
-        if (cand) {
-          if (cand.charAt(cand.length - 1) === "/") return null;   // folder path
-          return cand;
-        }
-      }
-      node = node.parentNode; hops++;
-    }
-    return null;
   }
 
   function api(path) {
@@ -398,44 +339,43 @@
 
   /* ------------------------------------------------------------------ hooks */
 
-  function onClickCapture(e) {
-    if (modal) return;                       // our modal already owns the screen
-    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-    var path = extractPath(e.target);
-    if (!path) return;                       // not a file entry we recognise -> leave stock behaviour
-    e.preventDefault();
-    e.stopPropagation();
-    openViewer(path);
-  }
-
-  function wrapEZView() {
-    if (!w.EZView || typeof w.EZView.preview !== "function" || w.EZView.__mfvWrapped) return;
-    var orig = w.EZView.preview;
-    w.EZView.__mfvWrapped = true;
-    w.EZView.preview = function () {
+  // The file manager's Browse page calls the global fileEdit(id) when a file is
+  // clicked (confirmed in unraid/webgui emhttp/plugins/dynamix/Browse.page). We
+  // override it: read the file's absolute path from its row element
+  //   $('#' + id.dfm_proxy()).attr('data')
+  // open our viewer, and fall back to the original for anything we can't handle
+  // (so directories / edge cases keep their stock behaviour).
+  function hookFileEdit() {
+    if (typeof w.fileEdit !== "function") return false;
+    if (w.fileEdit.__mfv) return true;
+    var orig = w.fileEdit;
+    var override = function (id) {
       try {
-        var args = Array.prototype.slice.call(arguments);
-        var path = null;
-        for (var i = 0; i < args.length; i++) {
-          if (typeof args[i] === "string" && PATH_RE.test(args[i])) { path = PATH_RE.exec(args[i])[1]; break; }
+        var sel = (id && typeof id.dfm_proxy === "function") ? id.dfm_proxy() : id;
+        var data = w.jQuery ? w.jQuery("#" + sel).attr("data") : null;
+        if (data) {
+          var path = PATH_RE.test(data) ? PATH_RE.exec(data)[1] : String(data).trim();
+          if (path && path.charAt(0) === "/") { openViewer(path); return; }
         }
-        if (path) { openViewer(path); return; }
-      } catch (err) { /* fall through to stock */ }
+      } catch (e) { /* fall through to stock */ }
       return orig.apply(this, arguments);
     };
+    override.__mfv = true;
+    override.__mfvOrig = orig;
+    w.fileEdit = override;
+    return true;
   }
 
   function install() {
-    if (!isBrowsePage()) return;
-    // Primary seam: intercept file clicks in capture phase.
-    d.addEventListener("click", onClickCapture, true);
-    // Secondary seam: wrap EZView if/when it appears.
-    wrapEZView();
+    // fileEdit is defined in the Browse page body. Our script loads in <head>
+    // (via the Buttons injector) so it may run first; poll until fileEdit
+    // appears, then stop. On non-Browse pages it never appears and we give up
+    // after the window with no side effects.
+    if (hookFileEdit()) return;
     var tries = 0;
     var iv = setInterval(function () {
-      wrapEZView();
-      if (++tries > 20 || (w.EZView && w.EZView.__mfvWrapped)) clearInterval(iv);
-    }, 500);
+      if (hookFileEdit() || ++tries > 40) clearInterval(iv);
+    }, 250);
   }
 
   if (d.readyState === "loading") d.addEventListener("DOMContentLoaded", install);

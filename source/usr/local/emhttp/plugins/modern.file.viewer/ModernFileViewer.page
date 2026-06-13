@@ -1,29 +1,31 @@
-Menu="Browse"
-Title=""
-Tag="home"
+Menu="Buttons:99"
+Title="Modern File Viewer"
+Icon="icon-u-file"
+Link="modern-file-viewer"
 ---
 <?php
 /**
  * Modern File Viewer - asset injector.
  *
- * Menu="Browse" hooks this fragment into the file manager's Browse view region
- * (the same mechanism the built-in BrowseButton.page uses to extend it). It
- * contributes only <link>/<script> tags plus a small bootstrap object and draws
- * no visible UI of its own. The JavaScript decides at runtime whether the
- * current page is actually the file-manager Browse view before doing anything,
- * so loading in any other context is harmless.
+ * Unraid emits the body of every "Buttons" page (Menu="Buttons:NN") into the
+ * <head> of EVERY webGUI page, including the file manager's /Shares/Browse view
+ * (see emhttp/plugins/dynamix/include/DefaultPageLayout.php, which loops over
+ * find_pages('Buttons')). That is the supported, update-safe way to get our
+ * <script>/<link> onto the Browse page without patching any built-in file.
  *
- * NOTE: the exact Menu/Tag hook the file manager exposes can shift between
- * Unraid releases; if injection ever stops, confirm the Browse extension hook
- * (Menu/Tag) against the installed dynamix.file.manager. The runtime self-guard
- * means a mismatch degrades to the stock viewer rather than breaking anything.
+ * We do NOT want a visible toolbar button, so Link is set (a non-empty Link
+ * makes Navigation/Main.php render an inert <div> instead of a clickable icon,
+ * and avoids needing a global function named after this page).
  *
- * Reuses the ACE editor already bundled with dynamix.file.manager rather than
- * shipping a second copy.
+ * Our JavaScript only acts where the global fileEdit(id) exists (the Browse
+ * page), so loading on other pages is inert.
+ *
+ * ACE lives in core dynamix at /plugins/dynamix/javascript/ace and is already
+ * present on the Browse page; we reuse it rather than shipping a second copy.
  */
-$mfv_var = @parse_ini_file('/usr/local/emhttp/state/var.ini') ?: [];
+$mfv_var  = @parse_ini_file('/usr/local/emhttp/state/var.ini') ?: [];
 $mfv_csrf = $mfv_var['csrf_token'] ?? '';
-$mfv_ace  = '/plugins/dynamix.file.manager/javascript/ace/ace.js';
+$mfv_ace  = '/plugins/dynamix/javascript/ace/ace.js';
 $mfv_base = '/plugins/modern.file.viewer';
 ?>
 <link rel="stylesheet" href="<?=$mfv_base?>/styles/mfv-viewer.css">
@@ -31,7 +33,7 @@ $mfv_base = '/plugins/modern.file.viewer';
 window.MFV = {
   base: "<?=$mfv_base?>",
   csrf: "<?=htmlspecialchars($mfv_csrf, ENT_QUOTES)?>",
-  acePath: "/plugins/dynamix.file.manager/javascript/ace"
+  acePath: "/plugins/dynamix/javascript/ace"
 };
 </script>
 <?php if (is_file('/usr/local/emhttp' . $mfv_ace)): ?>
