@@ -22,6 +22,49 @@
 
   var PATH_RE = /(\/(?:mnt|boot)\/[^"'?#]+)/;
 
+  // Follow the active Unraid theme. DefaultPageLayout puts a "Theme--<name>"
+  // class on <html> (black/gray = dark, white/azure = light). We read that as the
+  // authority; MFV.dark (set server-side from $display['theme']) is a fallback,
+  // and we default to dark if nothing is determinable.
+  function isDark() {
+    try {
+      var c = d.documentElement.className || "";
+      if (/\bTheme--(black|gray)\b/.test(c)) return true;
+      if (/\bTheme--(white|azure)\b/.test(c)) return false;
+    } catch (e) {}
+    if (typeof MFV.dark === "boolean") return MFV.dark;
+    return true;
+  }
+
+  // A manual toggle (the header sun/moon button) overrides the Unraid-theme
+  // default and is remembered across opens. effectiveDark() is the value the
+  // viewer actually renders with.
+  function storedTheme() {
+    try { return w.localStorage.getItem("mfv.theme"); } catch (e) { return null; }
+  }
+  function storeTheme(dark) {
+    try { w.localStorage.setItem("mfv.theme", dark ? "dark" : "light"); } catch (e) {}
+  }
+  function effectiveDark() {
+    var s = storedTheme();
+    if (s === "dark") return true;
+    if (s === "light") return false;
+    return isDark();
+  }
+  function aceThemeFor(dark) { return dark ? "ace/theme/tomorrow_night" : "ace/theme/tomorrow"; }
+
+  // Apply a light/dark choice to the open modal live: toggle the chrome class,
+  // retheme the editor if one is showing, and update the toggle button glyph.
+  function applyTheme(dark) {
+    if (!modal || !modal.el) return;
+    modal.el.classList.toggle("mfv-light", !dark);
+    if (modal.editor) { try { modal.editor.setTheme(aceThemeFor(dark)); } catch (e) {} }
+    if (modal._themeBtn) {
+      modal._themeBtn.innerHTML = dark ? "&#9728;" : "&#9790;";   // ☀ when dark / ☾ when light
+      modal._themeBtn.title = dark ? "Switch to light mode" : "Switch to dark mode";
+    }
+  }
+
   /* ------------------------------------------------------------------ utils */
 
   function formatBytes(n) {
@@ -80,19 +123,29 @@
   }
 
   function buildShell(title) {
+    var dark = effectiveDark();
     var overlay = el("div", "mfv-overlay");
+    if (!dark) overlay.classList.add("mfv-light");
     var box = el("div", "mfv-modal");
     var header = el("div", "mfv-header");
     var titleEl = el("div", "mfv-title");
     titleEl.textContent = title;
     var meta = el("div", "mfv-meta");
     var actions = el("div", "mfv-actions");
+    var themeBtn = el("button", "mfv-btn mfv-themetoggle", dark ? "&#9728;" : "&#9790;");
+    themeBtn.title = dark ? "Switch to light mode" : "Switch to dark mode";
+    themeBtn.addEventListener("click", function () {
+      var next = modal.el.classList.contains("mfv-light");   // currently light -> go dark
+      storeTheme(next);
+      applyTheme(next);
+    });
     var closeBtn = el("button", "mfv-btn mfv-close", "&times;");
     closeBtn.title = "Close (Esc)";
     closeBtn.addEventListener("click", closeModal);
     header.appendChild(titleEl);
     header.appendChild(meta);
     header.appendChild(actions);
+    header.appendChild(themeBtn);
     header.appendChild(closeBtn);
     var bodyEl = el("div", "mfv-body");
     box.appendChild(header);
@@ -101,7 +154,7 @@
     overlay.addEventListener("mousedown", function (e) { if (e.target === overlay) closeModal(); });
     d.body.appendChild(overlay);
     d.addEventListener("keydown", onKey, true);
-    return { el: overlay, header: header, meta: meta, actions: actions, body: bodyEl, title: titleEl };
+    return { el: overlay, header: header, meta: meta, actions: actions, body: bodyEl, title: titleEl, themeBtn: themeBtn };
   }
 
   /* ------------------------------------------------------------------ image */
@@ -230,9 +283,11 @@
   function makeEditor(container, language, content, readOnly) {
     var ed = w.ace.edit(container);
     try { w.ace.config.set("basePath", MFV.acePath); } catch (e) {}
-    // Dark theme to match the modal chrome. ACE lazy-loads theme-tomorrow_night.js
-    // from basePath; the try/catch keeps the editor usable if it's ever absent.
-    try { ed.setTheme("ace/theme/tomorrow_night"); } catch (e) {}
+    // Match the effective theme (Unraid default or the manual toggle): paired
+    // Tomorrow Night (dark) / Tomorrow (light) ACE themes. ACE lazy-loads the
+    // theme JS from basePath; the try/catch keeps the editor usable if a theme
+    // file is ever absent.
+    try { ed.setTheme(aceThemeFor(effectiveDark())); } catch (e) {}
     ed.setReadOnly(!!readOnly);
     ed.setOptions({ fontSize: "13px", showPrintMargin: false, useWorker: false, wrap: true });
     ed.session.setValue(content || "");
@@ -394,7 +449,7 @@
   function openViewer(path) {
     closeModal();
     var shell = buildShell(MFVDetect.basename(path));
-    modal = { el: shell.el, editor: null, editing: false, original: null };
+    modal = { el: shell.el, editor: null, editing: false, original: null, _themeBtn: shell.themeBtn };
     var loading = el("div", "mfv-loading", "Loading...");
     shell.body.appendChild(loading);
 

@@ -2,13 +2,13 @@
 <!DOCTYPE PLUGIN [
   <!ENTITY name      "modern.file.viewer">
   <!ENTITY author    "rizowski">
-  <!ENTITY version   "2026.06.13c">
+  <!ENTITY version   "2026.06.13d">
   <!ENTITY launch    "Shares/Browse">
   <!ENTITY gitURL    "https://github.com/rizowski/unraid-files">
   <!ENTITY pluginURL "&gitURL;/raw/main/&name;.plg">
   <!ENTITY txz       "&name;-&version;.txz">
   <!ENTITY txzURL    "&gitURL;/releases/download/&version;/&txz;">
-  <!ENTITY md5       "34ff16349c33213e8532b1257b9e61a8">
+  <!ENTITY md5       "ce7d8343fac844b00522b5da2cb97688">
   <!ENTITY plugins   "/boot/config/plugins/&name;">
   <!ENTITY emhttp    "/usr/local/emhttp/plugins/&name;">
 ]>
@@ -16,6 +16,10 @@
 <PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.10.0">
 
 <CHANGES>
+###2026.06.13d
+- The viewer now follows your Unraid theme: dark themes (black/gray) get a dark viewer + Tomorrow Night editor; light themes (white/azure) get a light viewer + Tomorrow editor.
+- Add a day/night toggle (sun/moon) in the viewer header to switch light/dark on the fly; your choice is remembered.
+
 ###2026.06.13c
 - Add dark mode: the syntax-highlighted editor now uses the Tomorrow Night theme to match the viewer, instead of a bright light theme.
 

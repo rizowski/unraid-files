@@ -27,13 +27,20 @@ $mfv_var  = @parse_ini_file('/usr/local/emhttp/state/var.ini') ?: [];
 $mfv_csrf = $mfv_var['csrf_token'] ?? '';
 $mfv_ace  = '/plugins/dynamix/javascript/ace/ace.js';
 $mfv_base = '/plugins/modern.file.viewer';
+
+// Server-side hint for the active Unraid theme (black/gray = dark, white/azure =
+// light). This is a fallback; mfv-viewer.js prefers the <html class="Theme--...">
+// set by DefaultPageLayout. Emit null when unknown so the client default applies.
+$mfv_theme = isset($display['theme']) ? strtok((string) $display['theme'], '-') : '';
+$mfv_dark  = $mfv_theme === '' ? null : in_array($mfv_theme, ['black', 'gray'], true);
 ?>
 <link rel="stylesheet" href="<?=$mfv_base?>/styles/mfv-viewer.css">
 <script>
 window.MFV = {
   base: "<?=$mfv_base?>",
   csrf: "<?=htmlspecialchars($mfv_csrf, ENT_QUOTES)?>",
-  acePath: "/plugins/dynamix/javascript/ace"
+  acePath: "/plugins/dynamix/javascript/ace",
+  dark: <?= $mfv_dark === null ? 'null' : ($mfv_dark ? 'true' : 'false') ?>
 };
 </script>
 <?php if (is_file('/usr/local/emhttp' . $mfv_ace)): ?>
