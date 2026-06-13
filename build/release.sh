@@ -138,12 +138,25 @@ else
     ${NOTE_ARGS[@]+"${NOTE_ARGS[@]}"} ${DRAFT_ARGS[@]+"${DRAFT_ARGS[@]}"}
 fi
 
+# Also attach the .plg to the release. raw.githubusercontent.com caches for
+# ~5 min, so right after a push the raw URL can serve a stale .plg; the release
+# asset is fresh immediately and gives a working install URL with no wait.
+echo ">> Uploading .plg to the release..."
+gh release upload "${VERSION}" "${PLG}" --clobber
+
+ASSET_URL="https://github.com/${SLUG}/releases/download/${VERSION}/${NAME}.plg"
+
 echo
 echo "============================================================"
 echo " Published Modern File Viewer ${VERSION}"
 echo
-echo " Install in Unraid -> Plugins -> Install Plugin, paste:"
+echo " Install in Unraid -> Plugins -> Install Plugin."
 echo
+echo " Install now (fresh, version-pinned):"
+echo "   ${ASSET_URL}"
+echo
+echo " Canonical URL (stable across versions; may be CDN-cached"
+echo " for up to ~5 min right after a release):"
 echo "   ${INSTALL_URL}"
 echo
 echo "============================================================"
