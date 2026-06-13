@@ -2,13 +2,13 @@
 <!DOCTYPE PLUGIN [
   <!ENTITY name      "modern.file.viewer">
   <!ENTITY author    "rizowski">
-  <!ENTITY version   "2026.06.13a">
+  <!ENTITY version   "2026.06.13b">
   <!ENTITY launch    "Shares/Browse">
   <!ENTITY gitURL    "https://github.com/rizowski/unraid-files">
   <!ENTITY pluginURL "&gitURL;/raw/main/&name;.plg">
   <!ENTITY txz       "&name;-&version;.txz">
   <!ENTITY txzURL    "&gitURL;/releases/download/&version;/&txz;">
-  <!ENTITY md5       "f0789cddb8daa8cba6eb1c65815f72fb">
+  <!ENTITY md5       "da7817c11750c9dc76bc8a6bfa767fc0">
   <!ENTITY plugins   "/boot/config/plugins/&name;">
   <!ENTITY emhttp    "/usr/local/emhttp/plugins/&name;">
 ]>
@@ -16,6 +16,9 @@
 <PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.10.0">
 
 <CHANGES>
+###2026.06.13b
+- Fix: Download button rendered as plain unstyled text (most visible on image previews next to the zoom buttons). All Download links now match the other toolbar buttons.
+
 ###2026.06.13a
 - Add audio playback: inline player for mp3, aac, m4a, flac, wav, ogg and more.
 - Add camera RAW preview (nef, cr2, cr3, arw, dng, ...): extracts the embedded JPEG (exiftool/dcraw/ImageMagick, with a no-dependency fallback).
