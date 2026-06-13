@@ -1,0 +1,4 @@
+# Built packages are hosted on GitHub Releases, not committed.
+/archive/
+*.bak
+*.tmp

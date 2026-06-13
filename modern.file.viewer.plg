@@ -1,0 +1,72 @@
+<?xml version='1.0' standalone='yes'?>
+<!DOCTYPE PLUGIN [
+  <!ENTITY name      "modern.file.viewer">
+  <!ENTITY author    "rizowski">
+  <!ENTITY version   "2026.06.12">
+  <!ENTITY launch    "Shares/Browse">
+  <!ENTITY gitURL    "https://github.com/rizowski/unraid-files">
+  <!ENTITY pluginURL "&gitURL;/raw/main/&name;.plg">
+  <!ENTITY txz       "&name;-&version;.txz">
+  <!ENTITY txzURL    "&gitURL;/releases/download/&version;/&txz;">
+  <!ENTITY md5       "a02b51f59ea9b125ca18b4cd1ec4b79b">
+  <!ENTITY plugins   "/boot/config/plugins/&name;">
+  <!ENTITY emhttp    "/usr/local/emhttp/plugins/&name;">
+]>
+
+<PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.10.0">
+
+<CHANGES>
+###&version;
+- Initial release.
+- Modern viewer injected into Shares &rarr; Browse: image previews and syntax-highlighted text/config.
+- Content-based type detection for extensionless files.
+- "Save as type" override store on the flash.
+- Explicit, permission-gated editing that preserves owner/group/mode.
+</CHANGES>
+
+<!--
+  Clean out any prior copy of the in-RAM plugin tree before (re)installing.
+  We only ever remove our OWN directory; nothing in dynamix.file.manager is touched.
+-->
+<FILE Run="/bin/bash">
+<INLINE>
+rm -rf &emhttp;
+</INLINE>
+</FILE>
+
+<!-- Download the package (skipped if a matching file is already present, e.g. local build copied to /boot). -->
+<FILE Name="/boot/config/plugins/&name;/&txz;" Min="6.10.0">
+<URL>&txzURL;</URL>
+<MD5>&md5;</MD5>
+</FILE>
+
+<!-- Install the package. doinst.sh inside the txz seeds the persistent config and fixes perms. -->
+<FILE Run="/bin/bash">
+<INLINE>
+PKG="/boot/config/plugins/&name;/&txz;"
+if [ ! -f "$PKG" ]; then
+  echo "**** Package not found: $PKG ****"
+  exit 1
+fi
+upgradepkg --install-new "$PKG"
+# Keep the flash tidy: remove the staged package after a successful install.
+rm -f "$PKG"
+echo ""
+echo "**** Modern File Viewer &version; installed. Open Shares -> Browse. ****"
+echo ""
+</INLINE>
+</FILE>
+
+<!-- Uninstall: remove the package, the RAM tree, and the persistent config. -->
+<FILE Run="/bin/bash" Method="remove">
+<INLINE>
+removepkg &name; 2>/dev/null
+rm -rf &emhttp;
+rm -rf &plugins;
+echo ""
+echo "**** Modern File Viewer removed. The built-in file manager is unaffected. ****"
+echo ""
+</INLINE>
+</FILE>
+
+</PLUGIN>

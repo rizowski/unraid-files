@@ -1,0 +1,12 @@
+       |-----handy-ruler------------------------------------------------------|
+modern.file.viewer: modern.file.viewer (Modern File Viewer for Unraid)
+modern.file.viewer:
+modern.file.viewer: A modern file viewer for the built-in file manager. Adds image
+modern.file.viewer: previews and syntax-highlighted text/config viewing to the
+modern.file.viewer: Shares -> Browse page, detects the type of extensionless files,
+modern.file.viewer: remembers a filename -> language mapping, and allows gated
+modern.file.viewer: editing that preserves the file's owner, group and mode.
+modern.file.viewer:
+modern.file.viewer: Author: rizowski
+modern.file.viewer: Homepage: https://github.com/rizowski/unraid-files
+modern.file.viewer:

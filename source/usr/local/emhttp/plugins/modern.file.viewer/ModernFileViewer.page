@@ -1,0 +1,41 @@
+Menu="Browse"
+Title=""
+Tag="home"
+---
+<?php
+/**
+ * Modern File Viewer - asset injector.
+ *
+ * Menu="Browse" hooks this fragment into the file manager's Browse view region
+ * (the same mechanism the built-in BrowseButton.page uses to extend it). It
+ * contributes only <link>/<script> tags plus a small bootstrap object and draws
+ * no visible UI of its own. The JavaScript decides at runtime whether the
+ * current page is actually the file-manager Browse view before doing anything,
+ * so loading in any other context is harmless.
+ *
+ * NOTE: the exact Menu/Tag hook the file manager exposes can shift between
+ * Unraid releases; if injection ever stops, confirm the Browse extension hook
+ * (Menu/Tag) against the installed dynamix.file.manager. The runtime self-guard
+ * means a mismatch degrades to the stock viewer rather than breaking anything.
+ *
+ * Reuses the ACE editor already bundled with dynamix.file.manager rather than
+ * shipping a second copy.
+ */
+$mfv_var = @parse_ini_file('/usr/local/emhttp/state/var.ini') ?: [];
+$mfv_csrf = $mfv_var['csrf_token'] ?? '';
+$mfv_ace  = '/plugins/dynamix.file.manager/javascript/ace/ace.js';
+$mfv_base = '/plugins/modern.file.viewer';
+?>
+<link rel="stylesheet" href="<?=$mfv_base?>/styles/mfv-viewer.css">
+<script>
+window.MFV = {
+  base: "<?=$mfv_base?>",
+  csrf: "<?=htmlspecialchars($mfv_csrf, ENT_QUOTES)?>",
+  acePath: "/plugins/dynamix.file.manager/javascript/ace"
+};
+</script>
+<?php if (is_file('/usr/local/emhttp' . $mfv_ace)): ?>
+<script src="<?=$mfv_ace?>"></script>
+<?php endif; ?>
+<script src="<?=$mfv_base?>/javascript/mfv-detect.js"></script>
+<script src="<?=$mfv_base?>/javascript/mfv-viewer.js"></script>
