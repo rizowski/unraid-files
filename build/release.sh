@@ -130,10 +130,12 @@ if gh release view "${VERSION}" >/dev/null 2>&1; then
   gh release upload "${VERSION}" "${TXZ}" --clobber
 else
   echo ">> Creating release ${VERSION}..."
+  # ${arr[@]+"${arr[@]}"} guards against "unbound variable" when an array is
+  # empty under `set -u` (notably macOS's bash 3.2).
   gh release create "${VERSION}" "${TXZ}" \
     --title "Modern File Viewer ${VERSION}" \
     --target "${BRANCH}" \
-    "${NOTE_ARGS[@]}" "${DRAFT_ARGS[@]}"
+    ${NOTE_ARGS[@]+"${NOTE_ARGS[@]}"} ${DRAFT_ARGS[@]+"${DRAFT_ARGS[@]}"}
 fi
 
 echo
