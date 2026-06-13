@@ -230,6 +230,9 @@
   function makeEditor(container, language, content, readOnly) {
     var ed = w.ace.edit(container);
     try { w.ace.config.set("basePath", MFV.acePath); } catch (e) {}
+    // Dark theme to match the modal chrome. ACE lazy-loads theme-tomorrow_night.js
+    // from basePath; the try/catch keeps the editor usable if it's ever absent.
+    try { ed.setTheme("ace/theme/tomorrow_night"); } catch (e) {}
     ed.setReadOnly(!!readOnly);
     ed.setOptions({ fontSize: "13px", showPrintMargin: false, useWorker: false, wrap: true });
     ed.session.setValue(content || "");
